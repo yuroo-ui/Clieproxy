@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String               @id @default(cuid())
+  email         String?              @unique
+  username      String?              @unique
+  password      String?
+  role          Role                 @default(USER)
+  emailVerified DateTime?            @default(now())
+  avatar        String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  accounts      Account[]
+  sessions      Session[]
+  wallet        UserWallet?
+  usage         LLMUsage[]
+  transactions  TransactionHistory[]
+  apiKeyConfigs ApiKeyConfig[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model UserWallet {
+  id        String       @id @default(cuid())
+  userId    String       @unique
+  balance   Float        @default(0)
+  currency  String       @default("USD")
+  status    WalletStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_wallets")
+}
+
+model TransactionHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  amount        Float
+  type          TxType
+  currency      String   @default("USD")
+  status        TxStatus @default(COMPLETED)
+  paymentMethod String?
+  paymentId     String?
+  metadata      String?  @db.Text
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transaction_histories")
+}
+
+model LLMUsage {
+  id        String   @id @default(cuid())
+  userId    String
+  model     String
+  provider  String?
+  tokensIn  Int      @default(0)
+  tokensOut Int      @default(0)
+  cost      Float    @default(0)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("llm_usage")
+}
+
+model LLMPriceConfig {
+  id               String   @id @default(cuid())
+  modelName        String   @unique
+  provider         String   @default("direct")
+  pricePerTokenIn  Float    @default(0.001)
+  pricePerTokenOut Float    @default(0.002)
+  isActive         Boolean  @default(true)
+  metadata         String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("llm_price_configs")
+}
+
+model ApiKeyConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  provider  String
+  apiKey    String   @db.Text
+  apiSecret String?  @db.Text
+  isActive  Boolean  @default(true)
+  metadata  String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_key_configs")
+}
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  type      String   @default("string")
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  details   String?  @db.Text
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+enum Role {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum WalletStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum TxType {
+  DEPOSIT
+  WITHDRAW
+  CHARGE
+  REFUND
+}
+
+enum TxStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
